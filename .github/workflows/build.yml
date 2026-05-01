@@ -37,15 +37,25 @@ jobs:
         with:
           toolchain: gnat_native^14 gprbuild
 
-      - name: Install LLVM 16 and tools
+      - name: Install LLVM 16 and all required tools
         run: |
           sudo apt update
           sudo apt install -y llvm-16-dev clang-16 libclang-16-dev llvm-16 llvm-16-tools
-          for tool in llvm-link opt llc llvm-as llvm-dis llvm-config llvm-ar llvm-nm llvm-objdump llvm-ranlib llvm-size llvm-strings llvm-strip; do
-            if [ ! -f "/usr/bin/$tool" ] && [ -f "/usr/bin/${tool}-16" ]; then
-              sudo ln -sf "/usr/bin/${tool}-16" "/usr/bin/$tool"
+          LLVM_BIN_DIR=$(find /usr -type d -name "llvm-16" 2>/dev/null | head -1)
+          [ -z "$LLVM_BIN_DIR" ] && LLVM_BIN_DIR="/usr/lib/llvm-16/bin"
+          echo "$LLVM_BIN_DIR" >> $GITHUB_PATH
+          sudo find "$LLVM_BIN_DIR" -type f -executable -name '*-16' -print0 | while IFS= read -r -d '' file; do
+            tool=$(basename "$file" -16)
+            sudo ln -sf "$file" "/usr/local/bin/$tool"
+          done
+          for tool in llvm-link opt llc llvm-as llvm-dis llvm-config llvm-ar; do
+            if [ ! -f "/usr/local/bin/$tool" ]; then
+              if [ -f "/usr/bin/${tool}-16" ]; then
+                sudo ln -sf "/usr/bin/${tool}-16" "/usr/local/bin/$tool"
+              fi
             fi
           done
+          sudo update-alternatives --install /usr/local/bin/llvm-config llvm-config /usr/bin/llvm-config-16 100 2>/dev/null || true
 
       - name: Build compiler
         run: |
@@ -55,6 +65,7 @@ jobs:
 
       - name: Build runtime library
         run: |
+          export PATH="/usr/local/bin:$PATH"
           export PATH=$(echo ~/.local/share/alire/toolchains/gnat_native*/bin):$PATH
           export PATH=$(echo ~/.local/share/alire/toolchains/gprbuild*/bin):$PATH
           export PATH="$PWD/gnat-llvm/llvm-interface/bin:$PATH"
