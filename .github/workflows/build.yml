@@ -37,29 +37,24 @@ jobs:
         with:
           toolchain: gnat_native^14 gprbuild
 
-      - name: Install LLVM 16 and all required tools
+      - name: Install LLVM 16 and tools
         run: |
           sudo apt update
           sudo apt install -y llvm-16-dev clang-16 libclang-16-dev llvm-16 llvm-16-tools
-          LLVM_BIN_DIR=$(find /usr -type d -name "llvm-16" 2>/dev/null | head -1)
-          [ -z "$LLVM_BIN_DIR" ] && LLVM_BIN_DIR="/usr/lib/llvm-16/bin"
+          LLVM_LINK16=$(find /usr -name 'llvm-link-16' -type f 2>/dev/null | head -1)
+          if [ -z "$LLVM_LINK16" ]; then
+            echo "ERROR: llvm-link-16 not found" >&2
+            exit 1
+          fi
+          sudo ln -sf "$LLVM_LINK16" /usr/local/bin/llvm-link
+          LLVM_BIN_DIR=$(dirname "$LLVM_LINK16")
           echo "$LLVM_BIN_DIR" >> $GITHUB_PATH
-          for tool in llvm-link opt llc llvm-as llvm-dis llvm-config llvm-ar; do
-            if [ ! -f "/usr/local/bin/$tool" ]; then
-              if [ -f "$LLVM_BIN_DIR/${tool}-16" ]; then
-                sudo ln -s "$LLVM_BIN_DIR/${tool}-16" "/usr/local/bin/$tool"
-              elif [ -f "/usr/bin/${tool}-16" ]; then
-                sudo ln -s "/usr/bin/${tool}-16" "/usr/local/bin/$tool"
-              fi
+          for tool in opt llc llvm-as llvm-dis llvm-ar; do
+            TOOL_PATH=$(find /usr -name "${tool}-16" -type f 2>/dev/null | head -1)
+            if [ -n "$TOOL_PATH" ]; then
+              sudo ln -sf "$TOOL_PATH" "/usr/local/bin/$tool"
             fi
           done
-
-      - name: Fix hardcoded tool names in build scripts
-        run: |
-          sed -i 's/ llvm-link / llvm-link-16 /g' gnat-llvm/llvm-interface/Makefile
-          sed -i 's/ opt / opt-16 /g' gnat-llvm/llvm-interface/Makefile
-          sed -i 's/ llvm-link / llvm-link-16 /g' gnat-llvm/llvm-interface/check_for_LLVM_aliasing_bug.sh
-          sed -i 's/ opt / opt-16 /g' gnat-llvm/llvm-interface/check_for_LLVM_aliasing_bug.sh
 
       - name: Build compiler
         run: |
