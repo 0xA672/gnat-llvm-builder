@@ -37,14 +37,13 @@ jobs:
         with:
           toolchain: gnat_native^14 gprbuild
 
-      - name: Install LLVM 16 (system libs + official prebuilt binaries)
+      - name: Download and setup LLVM 16 prebuilt
         run: |
-          sudo apt update
-          sudo apt install -y llvm-16-dev clang-16 libclang-16-dev lld-16
-          wget -q https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.6/clang+llvm-16.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
-          mkdir llvm-prebuilt
+          wget -nv https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.6/clang+llvm-16.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz
+          mkdir -p llvm-prebuilt
           tar xf clang+llvm-16.0.6-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C llvm-prebuilt --strip-components=1
           echo "$PWD/llvm-prebuilt/bin" >> $GITHUB_PATH
+          echo "LLVM_CONFIG=$PWD/llvm-prebuilt/bin/llvm-config" >> $GITHUB_ENV
 
       - name: Build compiler
         run: |
