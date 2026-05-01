@@ -1,36 +1,38 @@
-name: gnat-llvm
+name: Build GNAT-LLVM Toolchain
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     strategy:
       matrix:
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout source
+      - name: Checkout GNAT-LLVM
         uses: actions/checkout@v4
         with:
           repository: adacore/gnat-llvm
           ref: 3d596322e94eb1f2cf749caffed2eb952aef9bfa
           path: gnat-llvm
 
-      - name: Checkout GCC 14
+      - name: Checkout GCC
         uses: actions/checkout@v4
         with:
           repository: gcc-mirror/gcc
           ref: releases/gcc-14
           path: gnat-llvm/llvm-interface/gcc
 
-      - name: Link Ada sources
+      - name: Setup source link
         run: ln -s gcc/gcc/ada gnat-llvm/llvm-interface/gnat_src
 
-      - name: Apply patches
+      - name: Apply patch
         run: |
-          wget -nv -P gnat-llvm/llvm/patches \
-            https://raw.githubusercontent.com/godunko/adawebpack/refs/heads/master/patches/llvm_wrapper2.patch
+          wget -nv -P gnat-llvm/llvm/patches https://raw.githubusercontent.com/godunko/adawebpack/refs/heads/master/patches/llvm_wrapper2.patch
           patch -d gnat-llvm/llvm-interface -i ../llvm/patches/llvm_wrapper2.patch
 
       - name: Install GNAT & GPRbuild
@@ -38,54 +40,29 @@ jobs:
         with:
           toolchain: gnat_native^14 gprbuild
 
-      - name: Install LLVM 16
+      - name: Install LLVM 16 (22.04)
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           wget -nv https://github.com/llvm/llvm-project/releases/download/llvmorg-16.0.4/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz
           mkdir llvm-16
-          tar xf clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz -C llvm-16 --strip-components=1
-          echo "$PWD/llvm-16/bin" >> $GITHUB_PATH
-          echo "LLVM_PATH=$PWD/llvm-16" >> $GITHUB_ENV
+          tar xvfC $PWD/clang+llvm-16.0.4-x86_64-linux-gnu-ubuntu-22.04.tar.xz llvm-16 --strip-components=1
+          echo "$PWD/llvm-16/bin" >> "$GITHUB_PATH"
 
-      - name: Build toolchain
+      - name: Install LLVM 16 (24.04)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          sudo apt update
+          sudo apt --assume-yes install llvm-16-dev clang-16 libclang-16-dev
+          echo "/usr/lib/llvm-16/bin" >> "$GITHUB_PATH"
+
+      - name: Build
         run: |
           PATH=$(echo ~/.local/share/alire/toolchains/gnat_native*/bin):$PATH
           PATH=$(echo ~/.local/share/alire/toolchains/gprbuild*/bin):$PATH
           make -C gnat-llvm
 
-      - name: Prepare artifacts
-        run: |
-          PREFIX=$PWD/out
-          mkdir -p $PREFIX/bin
-          mkdir -p $PREFIX/rts/adainclude
-          mkdir -p $PREFIX/rts/adalib
-
-          cp gnat-llvm/llvm-interface/bin/* $PREFIX/bin/
-
-          cd gnat-llvm/llvm-interface
-          make -C gnat_src gnatlib
-          cp gnat_src/*.ad? $OLDPWD/out/rts/adainclude/
-          cp gnat_src/*.ali $OLDPWD/out/rts/adalib/
-          find . -maxdepth 1 -name '*.o' -exec cp {} $OLDPWD/out/rts/adalib/ \;
-          cd $OLDPWD
-
-          cp -r $LLVM_PATH/lib $PREFIX/
-
-      - name: Upload binaries only
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gnat-llvm-bin-${{ matrix.os }}
-          path: out/bin
-
-      - name: Upload runtime only
-        uses: actions/upload-artifact@v4
-        with:
-          name: gnat-llvm-rts-${{ matrix.os }}
-          path: |
-            out/rts
-            out/env.sh
-
-      - name: Upload full toolchain
-        uses: actions/upload-artifact@v4
-        with:
-          name: gnat-llvm-full-${{ matrix.os }}
-          path: out
+          name: gnat-llvm-${{ matrix.os }}
+          path: gnat-llvm/llvm-interface/bin/
