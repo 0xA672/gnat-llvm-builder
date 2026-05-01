@@ -37,15 +37,24 @@ jobs:
         with:
           toolchain: gnat_native^14 gprbuild
 
-      - name: Install LLVM 16
+      - name: Install LLVM 16 and tools
         run: |
           sudo apt update
-          sudo apt install -y llvm-16-dev clang-16 libclang-16-dev llvm-16
-          LLVM_LINK=$(find /usr -type f \( -name llvm-link-16 -o -name llvm-link \) 2>/dev/null | head -1)
-          [ -z "$LLVM_LINK" ] && echo "llvm-link not found" && exit 1
-          sudo ln -sf "$LLVM_LINK" /usr/local/bin/llvm-link
-          echo "/usr/local/bin" >> $GITHUB_PATH
-          echo "$(dirname "$LLVM_LINK")" >> $GITHUB_PATH
+          sudo apt install -y llvm-16-dev clang-16 libclang-16-dev llvm-16 llvm-16-tools
+          LLVM_BIN_DIR=$(find /usr -type d -name "llvm-16" 2>/dev/null | head -1)
+          if [ -z "$LLVM_BIN_DIR" ]; then
+            echo "Could not locate llvm-16 directory"
+            exit 1
+          fi
+          echo "$LLVM_BIN_DIR" >> $GITHUB_PATH
+          for tool in llvm-link opt llc llvm-as llvm-dis llvm-config; do
+            if [ -f "$LLVM_BIN_DIR/$tool" ]; then
+              sudo ln -sf "$LLVM_BIN_DIR/$tool" /usr/local/bin/$tool
+            elif [ -f "/usr/bin/${tool}-16" ]; then
+              sudo ln -sf "/usr/bin/${tool}-16" /usr/local/bin/$tool
+            fi
+          done
+          sudo update-alternatives --install /usr/local/bin/llvm-config llvm-config /usr/bin/llvm-config-16 100 2>/dev/null || true
 
       - name: Build compiler
         run: |
