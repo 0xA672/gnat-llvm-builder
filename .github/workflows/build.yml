@@ -37,18 +37,20 @@ jobs:
         with:
           toolchain: gnat_native^14 gprbuild
 
-      - name: Install LLVM 16 (with tools and aliases)
+      - name: Install LLVM 16
         run: |
           sudo apt update
           sudo apt install -y llvm-16-dev clang-16 libclang-16-dev llvm-16
-          sudo update-alternatives --install /usr/local/bin/llvm-link llvm-link /usr/bin/llvm-link-16 100
-          echo "/usr/lib/llvm-16/bin" >> $GITHUB_PATH
+          LLVM_LINK=$(find /usr -type f \( -name llvm-link-16 -o -name llvm-link \) 2>/dev/null | head -1)
+          [ -z "$LLVM_LINK" ] && echo "llvm-link not found" && exit 1
+          sudo ln -sf "$LLVM_LINK" /usr/local/bin/llvm-link
+          echo "/usr/local/bin" >> $GITHUB_PATH
+          echo "$(dirname "$LLVM_LINK")" >> $GITHUB_PATH
 
       - name: Build compiler
         run: |
           export PATH=$(echo ~/.local/share/alire/toolchains/gnat_native*/bin):$PATH
           export PATH=$(echo ~/.local/share/alire/toolchains/gprbuild*/bin):$PATH
-          export PATH="/usr/lib/llvm-16/bin:$PATH"
           make -C gnat-llvm
 
       - name: Build runtime library
@@ -56,7 +58,7 @@ jobs:
           export PATH="/usr/local/bin:$PATH"
           export PATH=$(echo ~/.local/share/alire/toolchains/gnat_native*/bin):$PATH
           export PATH=$(echo ~/.local/share/alire/toolchains/gprbuild*/bin):$PATH
-          export PATH="/usr/lib/llvm-16/bin:$PWD/gnat-llvm/llvm-interface/bin:$PATH"
+          export PATH="$PWD/gnat-llvm/llvm-interface/bin:$PATH"
           make -C gnat-llvm gnatlib-bc
 
       - name: Upload artifacts
