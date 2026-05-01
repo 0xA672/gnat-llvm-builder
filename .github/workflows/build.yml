@@ -41,27 +41,11 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y llvm-16-dev clang-16 libclang-16-dev llvm-16 llvm-16-tools
-          # Locate the real LLVM binary directory
-          LLVM_BIN_DIR=$(find /usr -type d -name "llvm-16" 2>/dev/null | head -1)
-          if [ -z "$LLVM_BIN_DIR" ]; then
-            echo "Cannot find llvm-16 directory"
-            exit 1
-          fi
-          echo "$LLVM_BIN_DIR" >> $GITHUB_PATH
-          # Install all versioned tools as unversioned symlinks
-          for tool in $LLVM_BIN_DIR/*-16; do
-            toolname=$(basename "$tool" -16)
-            sudo ln -sf "$tool" "/usr/local/bin/$toolname" 2>/dev/null || true
-          done
-          # Also handle tools that might be directly in /usr/bin with -16 suffix
-          for tool in /usr/bin/*-16; do
-            toolname=$(basename "$tool" -16)
-            if [ ! -f "/usr/local/bin/$toolname" ]; then
-              sudo ln -sf "$tool" "/usr/local/bin/$toolname" 2>/dev/null || true
+          for tool in llvm-link opt llc llvm-as llvm-dis llvm-config llvm-ar llvm-nm llvm-objdump llvm-ranlib llvm-size llvm-strings llvm-strip; do
+            if [ ! -f "/usr/bin/$tool" ] && [ -f "/usr/bin/${tool}-16" ]; then
+              sudo ln -sf "/usr/bin/${tool}-16" "/usr/bin/$tool"
             fi
           done
-          # Ensure llvm-config is up to date
-          sudo update-alternatives --install /usr/local/bin/llvm-config llvm-config /usr/bin/llvm-config-16 100 2>/dev/null || true
 
       - name: Build compiler
         run: |
@@ -71,7 +55,6 @@ jobs:
 
       - name: Build runtime library
         run: |
-          export PATH="/usr/local/bin:$PATH"
           export PATH=$(echo ~/.local/share/alire/toolchains/gnat_native*/bin):$PATH
           export PATH=$(echo ~/.local/share/alire/toolchains/gprbuild*/bin):$PATH
           export PATH="$PWD/gnat-llvm/llvm-interface/bin:$PATH"
